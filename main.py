@@ -147,10 +147,114 @@ def page_add_food():
 # B同学负责模块（仅保留入口）
 # ------------------------------
 def page_search_food():
-    """菜品检索查询（B同学开发）"""
+    """菜品检索查询页面"""
     st.title("🔍 菜品检索查询")
     st.markdown("---")
-    st.info("📌 此功能由B同学负责开发，敬请期待~")
+    
+    # 获取数据
+    df = read_data()
+    
+    # 搜索条件区域
+    st.subheader("📋 搜索条件")
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        search_canteen = st.text_input("🏢 食堂名称", placeholder="输入食堂名称关键词")
+    with col2:
+        search_food = st.text_input("🍱 菜品名称", placeholder="输入菜品名称关键词")
+    with col3:
+        taste_filter = st.selectbox(
+            "� 口味分类",
+            ["全部", "减脂", "清淡", "重口", "香辣", "甜口"]
+        )
+    
+    # 评分筛选
+    rating_min, rating_max = st.slider(
+        "⭐ 评分范围",
+        min_value=1,
+        max_value=5,
+        value=(1, 5),
+        step=1
+    )
+    
+    # 价格筛选
+    price_min, price_max = st.slider(
+        "💰 价格范围（元）",
+        min_value=0.0,
+        max_value=50.0,
+        value=(0.0, 50.0),
+        step=0.5,
+        format="%.2f"
+    )
+    
+    # 搜索按钮
+    search_button = st.button("🔍 开始搜索")
+    
+    # 执行搜索
+    if search_button or search_canteen or search_food or taste_filter != "全部":
+        # 应用筛选条件
+        filtered_df = df.copy()
+        
+        # 食堂名称筛选
+        if search_canteen.strip():
+            filtered_df = filtered_df[filtered_df['食堂名称'].str.contains(search_canteen.strip(), case=False)]
+        
+        # 菜品名称筛选
+        if search_food.strip():
+            filtered_df = filtered_df[filtered_df['菜品名称'].str.contains(search_food.strip(), case=False)]
+        
+        # 口味分类筛选
+        if taste_filter != "全部":
+            filtered_df = filtered_df[filtered_df['口味分类'] == taste_filter]
+        
+        # 评分范围筛选
+        filtered_df = filtered_df[(filtered_df['评分'] >= rating_min) & (filtered_df['评分'] <= rating_max)]
+        
+        # 价格范围筛选
+        filtered_df = filtered_df[(filtered_df['价格'] >= price_min) & (filtered_df['价格'] <= price_max)]
+        
+        # 显示结果
+        st.markdown("---")
+        st.subheader("📊 搜索结果")
+        
+        if filtered_df.empty:
+            st.warning("😔 未找到符合条件的菜品")
+        else:
+            st.success(f"🎉 找到 {len(filtered_df)} 条记录")
+            
+            # 显示数据表格
+            st.dataframe(
+                filtered_df[['食堂名称', '菜品名称', '口味分类', '价格', '评分', '评论', '录入时间']],
+                use_container_width=True,
+                column_config={
+                    '食堂名称': st.column_config.TextColumn('🏢 食堂名称'),
+                    '菜品名称': st.column_config.TextColumn('🍱 菜品名称'),
+                    '口味分类': st.column_config.TextColumn('👅 口味分类'),
+                    '价格': st.column_config.NumberColumn('💰 价格（元）', format="%.2f"),
+                    '评分': st.column_config.NumberColumn('⭐ 评分'),
+                    '评论': st.column_config.TextColumn('💬 评论'),
+                    '录入时间': st.column_config.TextColumn('📅 录入时间')
+                }
+            )
+            
+            # 显示详细信息卡片
+            st.markdown("---")
+            st.subheader("🗂️ 菜品详情")
+            
+            for _, row in filtered_df.iterrows():
+                with st.expander(f"🍽️ {row['菜品名称']} - {row['食堂名称']}"):
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.write(f"**食堂**: {row['食堂名称']}")
+                        st.write(f"**口味**: {row['口味分类']}")
+                        st.write(f"**价格**: ¥{row['价格']:.2f}")
+                        st.write(f"**评分**: {'⭐' * int(row['评分'])} ({row['评分']}分)")
+                    with col2:
+                        st.write(f"**录入时间**: {row['录入时间']}")
+                        if row['评论']:
+                            st.write(f"**评论**: {row['评论']}")
+                        else:
+                            st.write(f"**评论**: 暂无")
 
 def page_ranking():
     """热度排行（B同学开发）"""
