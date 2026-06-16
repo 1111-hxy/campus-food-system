@@ -88,7 +88,7 @@ def page_add_food():
         col1, col2 = st.columns(2)
         
         with col1:
-            canteen_name = st.text_input("🏢 食堂名称", placeholder="请输入食堂名称")
+            canteen_name = st.selectbox("🏢 食堂名称", ["鲲园", "泽园"])
             food_name = st.text_input("🍱 菜品名称", placeholder="请输入菜品名称")
         
         with col2:
@@ -110,9 +110,7 @@ def page_add_food():
     # 提交逻辑
     if submit_button:
         # 校验必填项
-        if not canteen_name.strip():
-            st.warning("⚠️ 请输入食堂名称！")
-        elif not food_name.strip():
+        if not food_name.strip():
             st.warning("⚠️ 请输入菜品名称！")
         else:
             # 组装数据
@@ -159,12 +157,12 @@ def page_search_food():
     col1, col2, col3 = st.columns(3)
     
     with col1:
-        search_canteen = st.text_input("🏢 食堂名称", placeholder="输入食堂名称关键词")
+        search_canteen = st.selectbox("🏢 食堂名称", ["全部", "鲲园", "泽园"])
     with col2:
         search_food = st.text_input("🍱 菜品名称", placeholder="输入菜品名称关键词")
     with col3:
         taste_filter = st.selectbox(
-            "� 口味分类",
+            "👅 口味分类",
             ["全部", "减脂", "清淡", "重口", "香辣", "甜口"]
         )
     
@@ -191,13 +189,13 @@ def page_search_food():
     search_button = st.button("🔍 开始搜索")
     
     # 执行搜索
-    if search_button or search_canteen or search_food or taste_filter != "全部":
+    if search_button or search_canteen != "全部" or search_food or taste_filter != "全部":
         # 应用筛选条件
         filtered_df = df.copy()
         
         # 食堂名称筛选
-        if search_canteen.strip():
-            filtered_df = filtered_df[filtered_df['食堂名称'].str.contains(search_canteen.strip(), case=False)]
+        if search_canteen != "全部":
+            filtered_df = filtered_df[filtered_df['食堂名称'] == search_canteen]
         
         # 菜品名称筛选
         if search_food.strip():
