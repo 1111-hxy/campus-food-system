@@ -641,10 +641,219 @@ def page_visualization():
             st.metric("口味种类", df['口味分类'].nunique())
 
 def page_recommendation():
-    """智能饮食推荐（B同学开发）"""
+    """智能饮食推荐页面"""
     st.title("🤖 智能饮食推荐")
     st.markdown("---")
-    st.info("📌 此功能由B同学负责开发，敬请期待~")
+    
+    # 获取数据
+    df = read_data()
+    
+    if df.empty:
+        st.warning("😔 暂无数据，请先添加菜品评价！")
+        return
+    
+    # 用户偏好设置
+    st.subheader("🎯 设置您的偏好")
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        preferred_canteen = st.selectbox("🏢 食堂偏好", ["全部", "鲲园", "泽园"])
+    
+    with col2:
+        preferred_taste = st.selectbox("👅 口味偏好", ["全部", "减脂", "清淡", "重口", "香辣", "甜口"])
+    
+    with col3:
+        price_range = st.selectbox("💰 价格偏好", ["全部", "0-10元", "10-20元", "20元以上"])
+    
+    # 推荐类型选择
+    recommendation_type = st.radio(
+        "📊 推荐类型",
+        ["智能综合推荐", "高分菜品推荐", "口味匹配推荐", "营养均衡推荐"],
+        horizontal=True
+    )
+    
+    # 生成推荐按钮
+    if st.button("✨ 生成推荐"):
+        # 根据偏好筛选数据
+        filtered_df = df.copy()
+        
+        # 食堂筛选
+        if preferred_canteen != "全部":
+            filtered_df = filtered_df[filtered_df['食堂名称'] == preferred_canteen]
+        
+        # 口味筛选
+        if preferred_taste != "全部":
+            filtered_df = filtered_df[filtered_df['口味分类'] == preferred_taste]
+        
+        # 价格筛选
+        if price_range == "0-10元":
+            filtered_df = filtered_df[(filtered_df['价格'] >= 0) & (filtered_df['价格'] <= 10)]
+        elif price_range == "10-20元":
+            filtered_df = filtered_df[(filtered_df['价格'] > 10) & (filtered_df['价格'] <= 20)]
+        elif price_range == "20元以上":
+            filtered_df = filtered_df[filtered_df['价格'] > 20]
+        
+        if filtered_df.empty:
+            st.warning("� 未找到符合您偏好的菜品，请调整筛选条件！")
+            return
+        
+        st.markdown("---")
+        
+        if recommendation_type == "智能综合推荐":
+            # 综合评分 = 评分 * 0.6 + 价格优惠度 * 0.4
+            # 价格优惠度：价格越低越好，归一化处理
+            max_price = filtered_df['价格'].max()
+            min_price = filtered_df['价格'].min()
+            price_range_val = max_price - min_price if max_price != min_price else 1
+            
+            filtered_df['综合评分'] = (
+                filtered_df['评分'] * 0.6 + 
+                ((max_price - filtered_df['价格']) / price_range_val) * 0.4
+            ).round(2)
+            
+            recommendations = filtered_df.sort_values('综合评分', ascending=False).head(5)
+            
+            st.subheader("🌟 智能综合推荐")
+            st.markdown("**推荐算法**: 综合考虑评分（60%权重）和性价比（40%权重）")
+            
+            # 展示推荐卡片
+            cols = st.columns(2)
+            for idx, (_, row) in enumerate(recommendations.iterrows()):
+                with cols[idx % 2]:
+                    st.markdown(f"""
+                    <div style="background: linear-gradient(135deg, #E8F5E9, #E3F2FD); 
+                                padding: 15px; border-radius: 10px; margin: 10px 0;
+                                border-left: 4px solid #4CAF50;">
+                        <h4>🍽️ {row['菜品名称']}</h4>
+                        <p><strong>🏢 食堂：</strong>{row['食堂名称']}</p>
+                        <p><strong>👅 口味：</strong>{row['口味分类']}</p>
+                        <p><strong>💰 价格：</strong>¥{row['价格']:.2f}</p>
+                        <p><strong>⭐ 评分：</strong>{row['评分']}分</p>
+                        <p><strong>📊 综合得分：</strong>{row['综合评分']:.2f}</p>
+                    </div>
+                    """, unsafe_allow_html=True)
+        
+        elif recommendation_type == "高分菜品推荐":
+            # 按评分排序，推荐评分最高的菜品
+            recommendations = filtered_df.sort_values('评分', ascending=False).head(5)
+            
+            st.subheader("⭐ 高分菜品推荐")
+            st.markdown("**推荐算法**: 按用户评分从高到低排序")
+            
+            # 展示推荐卡片
+            cols = st.columns(2)
+            for idx, (_, row) in enumerate(recommendations.iterrows()):
+                with cols[idx % 2]:
+                    st.markdown(f"""
+                    <div style="background: linear-gradient(135deg, #FFF3E0, #FFECB3); 
+                                padding: 15px; border-radius: 10px; margin: 10px 0;
+                                border-left: 4px solid #FF9800;">
+                        <h4>🍽️ {row['菜品名称']}</h4>
+                        <p><strong>🏢 食堂：</strong>{row['食堂名称']}</p>
+                        <p><strong>👅 口味：</strong>{row['口味分类']}</p>
+                        <p><strong>💰 价格：</strong>¥{row['价格']:.2f}</p>
+                        <p><strong>⭐ 评分：</strong>{'⭐' * int(row['评分'])} ({row['评分']}分)</p>
+                        <p><strong>💬 评论：</strong>{row['评论'][:30]}...</p>
+                    </div>
+                    """, unsafe_allow_html=True)
+        
+        elif recommendation_type == "口味匹配推荐":
+            # 根据口味偏好推荐
+            if preferred_taste != "全部":
+                taste_recommendations = filtered_df.sort_values('评分', ascending=False).head(5)
+                st.subheader(f"👅 {preferred_taste}口味推荐")
+            else:
+                # 如果没有选择口味，展示各口味代表菜品
+                taste_recommendations = []
+                for taste in ["减脂", "清淡", "重口", "香辣", "甜口"]:
+                    taste_df = filtered_df[filtered_df['口味分类'] == taste]
+                    if not taste_df.empty:
+                        taste_recommendations.append(taste_df.nlargest(1, '评分').iloc[0])
+                
+                st.subheader("👅 多样口味推荐")
+            
+            # 展示推荐卡片
+            cols = st.columns(2)
+            for idx, row in enumerate(taste_recommendations):
+                if isinstance(row, pd.Series):
+                    with cols[idx % 2]:
+                        st.markdown(f"""
+                        <div style="background: linear-gradient(135deg, #F3E5F5, #E1BEE7); 
+                                    padding: 15px; border-radius: 10px; margin: 10px 0;
+                                    border-left: 4px solid #9C27B0;">
+                            <h4>🍽️ {row['菜品名称']}</h4>
+                            <p><strong>🏢 食堂：</strong>{row['食堂名称']}</p>
+                            <p><strong>👅 口味：</strong>{row['口味分类']}</p>
+                            <p><strong>💰 价格：</strong>¥{row['价格']:.2f}</p>
+                            <p><strong>⭐ 评分：</strong>{row['评分']}分</p>
+                        </div>
+                        """, unsafe_allow_html=True)
+        
+        elif recommendation_type == "营养均衡推荐":
+            # 营养均衡推荐：推荐不同口味的搭配
+            # 推荐策略：减脂+清淡（健康）、重口+香辣（过瘾）、甜口（甜点）
+            
+            st.subheader("🥗 营养均衡推荐")
+            st.markdown("**推荐算法**: 根据营养搭配原则推荐组合菜品")
+            
+            # 组合推荐
+            combinations = [
+                {"name": "健康减脂套餐", "tastes": ["减脂", "清淡"]},
+                {"name": "风味过瘾套餐", "tastes": ["重口", "香辣"]},
+                {"name": "甜蜜下午茶", "tastes": ["甜口"]},
+                {"name": "均衡营养套餐", "tastes": ["清淡", "减脂", "甜口"]}
+            ]
+            
+            for combo in combinations:
+                with st.expander(f"🍱 {combo['name']}"):
+                    combo_items = []
+                    for taste in combo['tastes']:
+                        taste_df = filtered_df[filtered_df['口味分类'] == taste]
+                        if not taste_df.empty:
+                            combo_items.append(taste_df.nlargest(1, '评分').iloc[0])
+                    
+                    if combo_items:
+                        total_price = sum(item['价格'] for item in combo_items)
+                        avg_rating = sum(item['评分'] for item in combo_items) / len(combo_items)
+                        
+                        for item in combo_items:
+                            st.markdown(f"""
+                            <div style="display: flex; align-items: center; gap: 15px; padding: 10px; background: #F8FAFC; border-radius: 8px; margin: 5px 0;">
+                                <span style="font-size: 24px;">🍽️</span>
+                                <div>
+                                    <strong>{item['菜品名称']}</strong> - {item['食堂名称']}
+                                    <br>
+                                    <span style="color: #666; font-size: 13px;">
+                                        👅 {item['口味分类']} | 💰 ¥{item['价格']:.2f} | ⭐ {item['评分']}分
+                                    </span>
+                                </div>
+                            </div>
+                            """, unsafe_allow_html=True)
+                        
+                        st.markdown(f"""
+                        <div style="text-align: right; padding: 10px; margin-top: 10px; background: #E8F5E9; border-radius: 8px;">
+                            <strong>套餐总价：</strong>¥{total_price:.2f} | 
+                            <strong>平均评分：</strong>{avg_rating:.1f}⭐
+                        </div>
+                        """, unsafe_allow_html=True)
+                    else:
+                        st.info("暂无符合条件的菜品")
+        
+        # 今日推荐小贴士
+        st.markdown("---")
+        st.subheader("💡 今日饮食小贴士")
+        
+        tips = [
+            "🥛 早餐建议选择清淡或减脂类菜品，营养均衡更健康",
+            "🍚 午餐可以适当选择重口味，补充能量迎接下午课程",
+            "🍎 晚餐建议清淡为主，减轻肠胃负担",
+            "💧 用餐前后记得多喝水，保持身体水分",
+            "🥗 搭配不同口味的菜品，让营养更均衡",
+            "⏰ 按时就餐，养成良好的饮食习惯"
+        ]
+        
+        import random
+        st.success(random.choice(tips))
 
 # ------------------------------
 # 主函数
