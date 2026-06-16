@@ -257,16 +257,390 @@ def page_search_food():
                             st.write(f"**评论**: 暂无")
 
 def page_ranking():
-    """热度排行（B同学开发）"""
+    """热度排行页面"""
     st.title("🏆 热度排行")
     st.markdown("---")
-    st.info("📌 此功能由B同学负责开发，敬请期待~")
+    
+    # 获取数据
+    df = read_data()
+    
+    if df.empty:
+        st.warning("😔 暂无数据，请先添加菜品评价！")
+        return
+    
+    # 热度统计选项
+    ranking_type = st.radio(
+        "📊 选择排行类型",
+        ["按食堂热度", "按菜品热度", "按口味热度", "按评分排行"],
+        horizontal=True
+    )
+    
+    st.markdown("---")
+    
+    if ranking_type == "按食堂热度":
+        # 统计各食堂的菜品数量和平均评分
+        canteen_stats = df.groupby('食堂名称').agg({
+            '菜品名称': 'count',
+            '评分': 'mean',
+            '价格': 'mean'
+        }).round(2)
+        canteen_stats.columns = ['菜品数量', '平均评分', '平均价格']
+        canteen_stats = canteen_stats.sort_values('菜品数量', ascending=False)
+        
+        # 显示统计表格
+        st.subheader("🏢 食堂热度排行榜")
+        st.dataframe(
+            canteen_stats,
+            use_container_width=True
+        )
+        
+        # 绘制柱状图
+        fig, ax = plt.subplots(figsize=(10, 6))
+        canteen_stats['菜品数量'].plot(kind='bar', ax=ax, color='#FF6B6B')
+        ax.set_title('各食堂菜品数量统计', fontsize=16, fontweight='bold')
+        ax.set_xlabel('食堂名称', fontsize=12)
+        ax.set_ylabel('菜品数量', fontsize=12)
+        ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha='right')
+        plt.tight_layout()
+        st.pyplot(fig)
+        
+    elif ranking_type == "按菜品热度":
+        # 显示所有菜品评分排行
+        food_stats = df.groupby(['食堂名称', '菜品名称']).agg({
+            '评分': ['mean', 'count'],
+            '价格': 'first',
+            '口味分类': 'first'
+        }).round(2)
+        food_stats.columns = ['平均评分', '评价次数', '价格', '口味']
+        food_stats = food_stats.sort_values('平均评分', ascending=False)
+        
+        st.subheader("🍽️ 菜品评分排行榜")
+        st.dataframe(
+            food_stats,
+            use_container_width=True
+        )
+        
+        # 绘制评分排行图
+        top_foods = food_stats.head(10)
+        fig, ax = plt.subplots(figsize=(12, 6))
+        colors = plt.cm.RdYlGn([score/5 for score in top_foods['平均评分']])
+        bars = ax.barh(range(len(top_foods)), top_foods['平均评分'], color=colors)
+        ax.set_yticks(range(len(top_foods)))
+        ax.set_yticklabels([f"{idx[0]}-{idx[1][:10]}" for idx in top_foods.index])
+        ax.set_xlabel('评分', fontsize=12)
+        ax.set_title('Top 10 菜品评分排行', fontsize=16, fontweight='bold')
+        ax.invert_yaxis()
+        for i, (bar, score) in enumerate(zip(bars, top_foods['平均评分'])):
+            ax.text(bar.get_width() + 0.1, bar.get_y() + bar.get_height()/2, 
+                   f'{score:.1f}', va='center', fontsize=10)
+        plt.tight_layout()
+        st.pyplot(fig)
+        
+    elif ranking_type == "按口味热度":
+        # 统计各口味的菜品数量
+        taste_stats = df.groupby('口味分类').agg({
+            '菜品名称': 'count',
+            '评分': 'mean',
+            '价格': 'mean'
+        }).round(2)
+        taste_stats.columns = ['菜品数量', '平均评分', '平均价格']
+        taste_stats = taste_stats.sort_values('菜品数量', ascending=False)
+        
+        st.subheader("👅 口味热度排行榜")
+        st.dataframe(
+            taste_stats,
+            use_container_width=True
+        )
+        
+        # 绘制饼图
+        fig, axes = plt.subplots(1, 2, figsize=(14, 6))
+        
+        # 口味数量饼图
+        colors = ['#FF9999', '#FFCC99', '#99FF99', '#9999FF', '#FF99FF']
+        axes[0].pie(taste_stats['菜品数量'], labels=taste_stats.index, autopct='%1.1f%%', 
+                    colors=colors[:len(taste_stats)], startangle=90)
+        axes[0].set_title('口味分布占比', fontsize=14, fontweight='bold')
+        
+        # 口味平均评分柱状图
+        taste_stats['平均评分'].plot(kind='bar', ax=axes[1], color='#4ECDC4')
+        axes[1].set_title('各口味平均评分', fontsize=14, fontweight='bold')
+        axes[1].set_xlabel('口味', fontsize=12)
+        axes[1].set_ylabel('平均评分', fontsize=12)
+        axes[1].set_xticklabels(axes[1].get_xticklabels(), rotation=45, ha='right')
+        
+        plt.tight_layout()
+        st.pyplot(fig)
+        
+    else:  # 按评分排行
+        # 最高评分菜品
+        top_rated = df.nlargest(10, '评分')
+        
+        st.subheader("⭐ 高分菜品TOP10")
+        
+        # 显示详细卡片
+        cols = st.columns(2)
+        for idx, (_, row) in enumerate(top_rated.iterrows()):
+            with cols[idx % 2]:
+                st.markdown(f"""
+                <div style="background: linear-gradient(135deg, #FFF4E6, #FFE4E1); 
+                            padding: 15px; border-radius: 10px; margin: 5px 0;">
+                    <h4>🍽️ {row['菜品名称']}</h4>
+                    <p><strong>🏢 食堂：</strong>{row['食堂名称']}</p>
+                    <p><strong>⭐ 评分：</strong>{'⭐' * int(row['评分'])} ({row['评分']}分)</p>
+                    <p><strong>👅 口味：</strong>{row['口味分类']}</p>
+                    <p><strong>💰 价格：</strong>¥{row['价格']:.2f}</p>
+                    <p><strong>📅 时间：</strong>{row['录入时间']}</p>
+                </div>
+                """, unsafe_allow_html=True)
 
 def page_visualization():
-    """数据可视化（B同学开发）"""
+    """数据可视化页面"""
     st.title("📊 数据可视化")
     st.markdown("---")
-    st.info("📌 此功能由B同学负责开发，敬请期待~")
+    
+    # 获取数据
+    df = read_data()
+    
+    if df.empty:
+        st.warning("😔 暂无数据，请先添加菜品评价！")
+        return
+    
+    # 可视化类型选择
+    viz_type = st.selectbox(
+        "📈 选择可视化类型",
+        ["口味分布", "价格分布", "评分分布", "食堂对比", "综合分析"]
+    )
+    
+    st.markdown("---")
+    
+    if viz_type == "口味分布":
+        st.subheader("👅 口味分类统计")
+        
+        # 计算各口味数量
+        taste_counts = df['口味分类'].value_counts()
+        
+        # 绘制饼图
+        fig, ax = plt.subplots(figsize=(8, 8))
+        colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7']
+        wedges, texts, autotexts = ax.pie(
+            taste_counts.values, 
+            labels=taste_counts.index,
+            autopct='%1.1f%%',
+            colors=colors[:len(taste_counts)],
+            explode=[0.05] * len(taste_counts),
+            shadow=True,
+            startangle=90
+        )
+        ax.set_title('口味分类分布图', fontsize=16, fontweight='bold')
+        
+        # 美化标签
+        for text in texts:
+            text.set_fontsize(12)
+        for autotext in autotexts:
+            autotext.set_color('white')
+            autotext.set_fontsize(11)
+            autotext.set_fontweight('bold')
+        
+        plt.tight_layout()
+        st.pyplot(fig)
+        
+        # 显示统计表格
+        st.markdown("### 📋 口味统计详情")
+        taste_df = pd.DataFrame({
+            '口味': taste_counts.index,
+            '数量': taste_counts.values,
+            '占比': (taste_counts.values / taste_counts.sum() * 100).round(2).astype(str) + '%'
+        })
+        st.dataframe(taste_df, use_container_width=True, hide_index=True)
+        
+    elif viz_type == "价格分布":
+        st.subheader("💰 价格区间统计")
+        
+        # 创建价格区间
+        price_bins = [0, 5, 10, 15, 20, 30, 50]
+        price_labels = ['0-5元', '5-10元', '10-15元', '15-20元', '20-30元', '30-50元']
+        df['价格区间'] = pd.cut(df['价格'], bins=price_bins, labels=price_labels, include_lowest=True)
+        price_distribution = df['价格区间'].value_counts().sort_index()
+        
+        # 绘制柱状图
+        fig, ax = plt.subplots(figsize=(10, 6))
+        bars = ax.bar(price_distribution.index, price_distribution.values, 
+                     color='#3498DB', edgecolor='white', linewidth=2)
+        
+        # 添加数值标签
+        for bar in bars:
+            height = bar.get_height()
+            ax.text(bar.get_x() + bar.get_width()/2., height,
+                   f'{int(height)}',
+                   ha='center', va='bottom', fontsize=12, fontweight='bold')
+        
+        ax.set_xlabel('价格区间', fontsize=12)
+        ax.set_ylabel('菜品数量', fontsize=12)
+        ax.set_title('价格区间分布图', fontsize=16, fontweight='bold')
+        ax.grid(axis='y', alpha=0.3)
+        plt.tight_layout()
+        st.pyplot(fig)
+        
+        # 价格统计信息
+        st.markdown("### 📊 价格统计信息")
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("平均价格", f"¥{df['价格'].mean():.2f}")
+        with col2:
+            st.metric("最低价格", f"¥{df['价格'].min():.2f}")
+        with col3:
+            st.metric("最高价格", f"¥{df['价格'].max():.2f}")
+        with col4:
+            st.metric("价格中位数", f"¥{df['价格'].median():.2f}")
+        
+    elif viz_type == "评分分布":
+        st.subheader("⭐ 评分分布统计")
+        
+        # 评分统计
+        rating_counts = df['评分'].value_counts().sort_index()
+        
+        # 绘制柱状图
+        fig, ax = plt.subplots(figsize=(10, 6))
+        colors = ['#E74C3C', '#E67E22', '#F39C12', '#2ECC71', '#27AE60']
+        bars = ax.bar(rating_counts.index, rating_counts.values, color=colors, edgecolor='white', linewidth=2)
+        
+        # 添加数值标签
+        for bar in bars:
+            height = bar.get_height()
+            ax.text(bar.get_x() + bar.get_width()/2., height,
+                   f'{int(height)}',
+                   ha='center', va='bottom', fontsize=12, fontweight='bold')
+        
+        ax.set_xlabel('评分（分）', fontsize=12)
+        ax.set_ylabel('菜品数量', fontsize=12)
+        ax.set_title('评分分布图', fontsize=16, fontweight='bold')
+        ax.set_xticks([1, 2, 3, 4, 5])
+        ax.grid(axis='y', alpha=0.3)
+        plt.tight_layout()
+        st.pyplot(fig)
+        
+        # 评分统计信息
+        st.markdown("### 📊 评分统计信息")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("平均评分", f"{df['评分'].mean():.2f} ⭐")
+        with col2:
+            st.metric("最高评分", f"{df['评分'].max()} ⭐")
+        with col3:
+            st.metric("最低评分", f"{df['评分'].min()} ⭐")
+            
+    elif viz_type == "食堂对比":
+        st.subheader("🏢 食堂对比分析")
+        
+        # 各食堂统计
+        canteen_stats = df.groupby('食堂名称').agg({
+            '菜品名称': 'count',
+            '评分': 'mean',
+            '价格': 'mean'
+        }).round(2)
+        canteen_stats.columns = ['菜品数量', '平均评分', '平均价格']
+        canteen_stats = canteen_stats.sort_values('菜品数量', ascending=False)
+        
+        # 绘制对比图
+        fig, axes = plt.subplots(1, 3, figsize=(15, 5))
+        
+        # 菜品数量对比
+        canteen_stats['菜品数量'].plot(kind='bar', ax=axes[0], color='#FF6B6B', edgecolor='white')
+        axes[0].set_title('各食堂菜品数量', fontsize=14, fontweight='bold')
+        axes[0].set_xlabel('食堂名称', fontsize=11)
+        axes[0].set_ylabel('数量', fontsize=11)
+        axes[0].tick_params(axis='x', rotation=45)
+        
+        # 平均评分对比
+        canteen_stats['平均评分'].plot(kind='bar', ax=axes[1], color='#4ECDC4', edgecolor='white')
+        axes[1].set_title('各食堂平均评分', fontsize=14, fontweight='bold')
+        axes[1].set_xlabel('食堂名称', fontsize=11)
+        axes[1].set_ylabel('评分', fontsize=11)
+        axes[1].tick_params(axis='x', rotation=45)
+        
+        # 平均价格对比
+        canteen_stats['平均价格'].plot(kind='bar', ax=axes[2], color='#45B7D1', edgecolor='white')
+        axes[2].set_title('各食堂平均价格', fontsize=14, fontweight='bold')
+        axes[2].set_xlabel('食堂名称', fontsize=11)
+        axes[2].set_ylabel('价格（元）', fontsize=11)
+        axes[2].tick_params(axis='x', rotation=45)
+        
+        plt.tight_layout()
+        st.pyplot(fig)
+        
+        # 显示统计表格
+        st.markdown("### 📋 食堂统计详情")
+        st.dataframe(canteen_stats, use_container_width=True)
+        
+    else:  # 综合分析
+        st.subheader("📊 综合数据分析")
+        
+        # 创建综合图表
+        fig = plt.figure(figsize=(14, 10))
+        
+        # 口味与评分关系
+        ax1 = fig.add_subplot(2, 2, 1)
+        taste_rating = df.groupby('口味分类')['评分'].mean().sort_values(ascending=False)
+        taste_rating.plot(kind='bar', ax=ax1, color='#9B59B6')
+        ax1.set_title('各口味平均评分', fontsize=12, fontweight='bold')
+        ax1.set_xlabel('口味', fontsize=10)
+        ax1.set_ylabel('平均评分', fontsize=10)
+        ax1.tick_params(axis='x', rotation=45)
+        
+        # 价格与评分关系散点图
+        ax2 = fig.add_subplot(2, 2, 2)
+        scatter = ax2.scatter(df['价格'], df['评分'], c=df['评分'], 
+                            cmap='RdYlGn', s=100, alpha=0.7, edgecolors='white')
+        ax2.set_title('价格与评分关系', fontsize=12, fontweight='bold')
+        ax2.set_xlabel('价格（元）', fontsize=10)
+        ax2.set_ylabel('评分', fontsize=10)
+        plt.colorbar(scatter, ax=ax2, label='评分')
+        
+        # 每月评价趋势（如果有日期数据）
+        ax3 = fig.add_subplot(2, 2, 3)
+        df['月份'] = pd.to_datetime(df['录入时间']).dt.to_period('M')
+        monthly_counts = df.groupby('月份').size()
+        monthly_counts.plot(kind='line', ax=ax3, marker='o', color='#E74C3C', linewidth=2)
+        ax3.set_title('月度评价趋势', fontsize=12, fontweight='bold')
+        ax3.set_xlabel('月份', fontsize=10)
+        ax3.set_ylabel('评价数量', fontsize=10)
+        ax3.grid(alpha=0.3)
+        
+        # 综合评分雷达图（简化版）
+        ax4 = fig.add_subplot(2, 2, 4)
+        categories = ['口味多样性', '性价比', '平均评分', '评价数量']
+        # 计算各项指标（归一化）
+        taste_diversity = len(df['口味分类'].unique()) / 5
+        cost_performance = 1 - (df['价格'].mean() - df['价格'].min()) / (df['价格'].max() - df['价格'].min() + 0.01)
+        avg_rating = df['评分'].mean() / 5
+        review_count = min(df.shape[0] / 20, 1)
+        
+        values = [taste_diversity, cost_performance, avg_rating, review_count]
+        colors = plt.cm.Set3([0.2, 0.4, 0.6, 0.8])
+        bars = ax4.bar(categories, values, color=colors, edgecolor='white', linewidth=2)
+        ax4.set_title('综合指标分析', fontsize=12, fontweight='bold')
+        ax4.set_ylabel('得分（0-1）', fontsize=10)
+        ax4.set_ylim(0, 1.1)
+        for bar, value in zip(bars, values):
+            ax4.text(bar.get_x() + bar.get_width()/2., bar.get_height() + 0.02,
+                    f'{value:.2f}', ha='center', fontsize=10, fontweight='bold')
+        
+        plt.tight_layout()
+        st.pyplot(fig)
+        
+        # 显示总体统计
+        st.markdown("### 📈 总体统计信息")
+        col1, col2, col3, col4, col5 = st.columns(5)
+        with col1:
+            st.metric("总菜品数", len(df))
+        with col2:
+            st.metric("总食堂数", df['食堂名称'].nunique())
+        with col3:
+            st.metric("平均评分", f"{df['评分'].mean():.2f} ⭐")
+        with col4:
+            st.metric("平均价格", f"¥{df['价格'].mean():.2f}")
+        with col5:
+            st.metric("口味种类", df['口味分类'].nunique())
 
 def page_recommendation():
     """智能饮食推荐（B同学开发）"""
